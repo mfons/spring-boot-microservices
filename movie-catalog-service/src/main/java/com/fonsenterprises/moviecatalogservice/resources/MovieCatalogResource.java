@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +17,9 @@ import com.fonsenterprises.moviecatalogservice.models.CatalogItem;
 import com.fonsenterprises.moviecatalogservice.models.Movie;
 import com.fonsenterprises.moviecatalogservice.models.Rating;
 import com.fonsenterprises.moviecatalogservice.models.UserRatings;
+import com.fonsenterprises.moviecatalogservice.services.MovieInfo;
+import com.fonsenterprises.moviecatalogservice.services.UserRatingsInfo;
+import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
 
 @RestController
 @RequestMapping("/catalog")
@@ -25,32 +29,29 @@ public class MovieCatalogResource {
 	private RestTemplate restTemplate;
 	
 	@Autowired
+	private DiscoveryClient discoveryClient;
+	
+	@Autowired
 	private WebClient.Builder webClientBuilder;
+	
+	@Autowired
+	MovieInfo movieInfo;
+	
+	@Autowired
+	UserRatingsInfo userRatingsInfo;
 	
 	@RequestMapping("/{userId}")
 	public List<CatalogItem> getCatalog(@PathVariable("userId") String userId){				
 		
-		UserRatings userRatings = restTemplate.getForObject("http://localhost:8083/ratingsdata/users/" + userId, UserRatings.class);
+		UserRatings userRatings = userRatingsInfo.getUserRatings(userId);
 		
-		return userRatings.getRatings().stream().map(rating -> {
-			Movie movie = restTemplate.getForObject("http://localhost:8082/movies/" + rating.getMovieId(), Movie.class);
-			
-			/*
-			Movie movie = webClientBuilder.build()
-			.get()
-			.uri("http://localhost:8082/movies/" + rating.getMovieId())
-			.retrieve()
-			.bodyToMono(Movie.class)
-			.block();
-			*/
-			
-			return new CatalogItem(movie.getName(), "Test", rating.getRating());	
-		})
+		return userRatings.getRatings().stream()
+			.map(rating -> movieInfo.getCatalogItem(rating))
 			.collect(Collectors.toList());
 		
 		// For each movie ID, call movie info service and get details
 		
 		// Put them all together
 		
-	}
+	}	
 }
